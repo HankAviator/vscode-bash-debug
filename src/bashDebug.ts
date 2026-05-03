@@ -36,6 +36,26 @@ export interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArgum
     trace?: boolean;
 }
 
+interface RunInTerminalRequestArgumentsWithShellInterpretation extends DebugProtocol.RunInTerminalRequestArguments {
+    argsCanBeInterpretedByShell?: boolean;
+}
+
+export function createRunInTerminalArgs(
+    kind: 'integrated' | 'external',
+    currentShell: string,
+    optionalBashPathArgument: string,
+    command: string
+): RunInTerminalRequestArgumentsWithShellInterpretation {
+    return {
+        kind,
+        title: "Bash Debug Console",
+        cwd: ".",
+        args: [currentShell, optionalBashPathArgument, `-c`, command].filter(arg => arg !== ""),
+        // Keep the -c payload intact so the client does not escape shell operators like '!'.
+        argsCanBeInterpretedByShell: true,
+    };
+}
+
 export class BashDebugSession extends LoggingDebugSession {
 
     private static THREAD_ID = 42;
@@ -164,12 +184,11 @@ export class BashDebugSession extends LoggingDebugSession {
         else {
             const currentShell = (process.platform === "win32") ? getWSLLauncherPath(true) : args.pathBash;
             const optionalBashPathArgument = (currentShell !== args.pathBash) ? args.pathBash : "";
-            const termArgs: DebugProtocol.RunInTerminalRequestArguments = {
-                kind: this.launchArgs.terminalKind,
-                title: "Bash Debug Console",
-                cwd: ".",
-                args: [currentShell, optionalBashPathArgument, `-c`, command].filter(arg => arg !== ""),
-            };
+            const termArgs = createRunInTerminalArgs(
+                this.launchArgs.terminalKind,
+                currentShell,
+                optionalBashPathArgument,
+                command);
 
             this.runInTerminalRequest(termArgs, 10000, (response) => {
                 if (!response.success) {
